@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maqueta — Terminal IA Supply</title>
+  <style>
+    /* ============================================================
+       BASE
+       ============================================================ */
+    :root {
+      --bg:        #0d1117;
+      --bg2:       #161b22;
+      --bg3:       #21262d;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --dim:       #484f58;
+      --green:     #3fb950;
+      --blue:      #58a6ff;
+      --yellow:    #d29922;
+      --orange:    #f0883e;
+      --red:       #f85149;
+      --purple:    #bc8cff;
+      --teal:      #39d3bb;
+      --font:      'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      grid-template-rows: 100vh;
+      overflow: hidden;
+    }
+
+    /* ============================================================
+       PANEL IZQUIERDO — TERMINAL
+       ============================================================ */
+    .terminal-panel {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    /* Header */
+    .t-header {
+      display: flex;
+      align-items: center;
+      padding: 11px 16px;
+      background: var(--bg3);
+      border-bottom: 1px solid var(--border);
+      gap: 10px;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .dots { display: flex; gap: 6px; }
+    .dot  { width: 11px; height: 11px; border-radius: 50%; }
+    .dot.r { background: #ff5f57; }
+    .dot.y { background: #ffbd2e; }
+    .dot.g { background: #28c840; }
+
+    .t-title {
+      flex: 1;
+      text-align: center;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-mock {
+      background: rgba(188,140,255,0.15);
+      color: var(--purple);
+      border: 1px solid rgba(188,140,255,0.3);
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    /* Output */
+    .t-output {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      scroll-behavior: smooth;
+    }
+    .t-output::-webkit-scrollbar { width: 4px; }
+    .t-output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* Mensajes */
+    .msg { display: flex; flex-direction: column; gap: 5px; animation: fadeIn .2s ease; }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(3px); } to { opacity:1; transform:none; } }
+
+    .msg-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+    .msg-body {
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .msg.user   .msg-label { color: var(--blue); }
+    .msg.ia     .msg-label { color: var(--green); }
+    .msg.sys    .msg-label { color: var(--purple); }
+    .msg.sys    .msg-body  { color: var(--muted); font-size: 12px; }
+    .msg.error  .msg-label { color: var(--red); }
+    .msg.error  .msg-body  { color: var(--red); }
+
+    /* Tabla de texto */
+    .t-table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 4px 0;
+      font-size: 12px;
+    }
+    .t-table th {
+      text-align: left;
+      color: var(--muted);
+      padding: 4px 10px 4px 0;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+    }
+    .t-table td {
+      padding: 5px 10px 5px 0;
+      border-bottom: 1px solid rgba(48,54,61,0.5);
+      vertical-align: top;
+    }
+    .t-table tr:last-child td { border-bottom: none; }
+
+    /* Badges de estado */
+    .badge {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .badge.ok   { background: rgba(63,185,80,.15);  color: var(--green);  border: 1px solid rgba(63,185,80,.3);  }
+    .badge.warn { background: rgba(210,153,34,.15); color: var(--yellow); border: 1px solid rgba(210,153,34,.3); }
+    .badge.buy  { background: rgba(240,136,62,.15); color: var(--orange); border: 1px solid rgba(240,136,62,.3); }
+    .badge.err  { background: rgba(248,81,73,.15);  color: var(--red);    border: 1px solid rgba(248,81,73,.3);  }
+
+    /* Typing */
+    .typing { display: flex; align-items: center; gap: 4px; padding: 2px 0; }
+    .td     { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: bounce 1.2s infinite; }
+    .td:nth-child(2) { animation-delay: .2s; }
+    .td:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce { 0%,80%,100%{transform:scale(.5);opacity:.4} 40%{transform:scale(1);opacity:1} }
+
+    /* Quick actions */
+    .quick-bar {
+      display: flex;
+      gap: 6px;
+      padding: 8px 16px;
+      border-top: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none;
+      flex-shrink: 0;
+    }
+    .quick-bar::-webkit-scrollbar { display: none; }
+    .qbtn {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 4px 11px;
+      border-radius: 16px;
+      font-family: var(--font);
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all .15s;
+    }
+    .qbtn:hover { background: var(--border); color: var(--text); border-color: var(--blue); }
+
+    /* Input */
+    .t-input-row {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 11px 16px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .t-prompt { color: var(--green); font-size: 16px; font-weight: bold; user-select: none; }
+    .t-input  {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text); font-family: var(--font); font-size: 13px;
+      caret-color: var(--green);
+    }
+    .t-input::placeholder { color: var(--dim); }
+    .t-send {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      width: 32px; height: 32px;
+      border-radius: 7px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .15s;
+      flex-shrink: 0;
+    }
+    .t-send:hover { background: var(--blue); border-color: var(--blue); color: #fff; }
+    .t-send:disabled { opacity: .35; cursor: not-allowed; }
+
+    /* ============================================================
+       PANEL DERECHO — WORKFLOW VISUAL
+       ============================================================ */
+    .flow-panel {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg2);
+      overflow: hidden;
+    }
+
+    .flow-header {
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .flow-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+    .flow-body::-webkit-scrollbar { display: none; }
+
+    /* Nodos del workflow */
+    .wf-node {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg3);
+      position: relative;
+      transition: all .3s;
+    }
+    .wf-node.active {
+      border-color: var(--blue);
+      background: rgba(88,166,255,.07);
+      box-shadow: 0 0 0 1px rgba(88,166,255,.2);
+    }
+    .wf-node.done {
+      border-color: rgba(63,185,80,.4);
+      background: rgba(63,185,80,.05);
+    }
+    .wf-node.idle {
+      opacity: .45;
+    }
+
+    .wf-node-icon  { font-size: 16px; line-height: 1; }
+    .wf-node-name  { font-size: 11px; font-weight: 600; color: var(--text); }
+    .wf-node-desc  { font-size: 10px; color: var(--muted); }
+
+    .wf-status {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      font-size: 14px;
+    }
+
+    /* Conector entre nodos */
+    .wf-connector {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 22px;
+      color: var(--dim);
+      font-size: 16px;
+      user-select: none;
+    }
+    .wf-connector.active-line { color: var(--blue); }
+
+    /* Info de la ejecución */
+    .exec-info {
+      margin-top: auto;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .exec-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+    }
+    .exec-row .label { color: var(--muted); }
+    .exec-row .value { color: var(--text); font-weight: 600; }
+    .exec-row .value.highlight { color: var(--green); }
+
+    /* Chip de intención detectada */
+    .intent-chip {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      background: rgba(88,166,255,.15);
+      color: var(--blue);
+      border: 1px solid rgba(88,166,255,.3);
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      body { grid-template-columns: 1fr; }
+      .flow-panel { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ============================================================
+     PANEL IZQUIERDO — TERMINAL
+     ============================================================ -->
+<div class="terminal-panel">
+  <div class="t-header">
+    <div class="dots">
+      <span class="dot r"></span>
+      <span class="dot y"></span>
+      <span class="dot g"></span>
+    </div>
+    <div class="t-title">terminal-ia — sistema supply</div>
+    <span class="badge-mock">MAQUETA</span>
+  </div>
+
+  <div class="t-output" id="output"></div>
+
+  <div class="quick-bar">
+    <button class="qbtn" data-cmd="¿Qué fronteras están pendientes?">⚠️ Pendientes</button>
+    <button class="qbtn" data-cmd="¿Cuántos equipos hay disponibles?">📦 Equipos libres</button>
+    <button class="qbtn" data-cmd="Dame un resumen del día">📊 Resumen</button>
+    <button class="qbtn" data-cmd="Asigna un equipo a la frontera FRO-001">⚡ Asignar</button>
+    <button class="qbtn" data-cmd="Marca FRO-005 como pendiente de compra">🛒 Pend. compra</button>
+    <button class="qbtn" data-cmd="¿Qué equipos están en reparación?">🔧 En reparación</button>
+  </div>
+
+  <div class="t-input-row">
+    <span class="t-prompt">›</span>
+    <input
+      id="cmd-input"
+      class="t-input"
+      type="text"
+      placeholder="Escribe un comando en lenguaje natural..."
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <button id="send-btn" class="t-send" title="Enviar (Enter)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- ============================================================
+     PANEL DERECHO — WORKFLOW VISUAL
+     ============================================================ -->
+<div class="flow-panel">
+  <div class="flow-header">flujo n8n — ejecución</div>
+  <div class="flow-body" id="flow-body">
+
+    <div class="wf-node idle" id="node-webhook">
+      <div class="wf-node-icon">🔗</div>
+      <div class="wf-node-name">Webhook Trigger</div>
+      <div class="wf-node-desc">Recibe el comando del chat</div>
+      <div class="wf-status" id="st-webhook">○</div>
+    </div>
+
+    <div class="wf-connector" id="line-1">│</div>
+
+    <div class="wf-node idle" id="node-ia1">
+      <div class="wf-node-icon">🧠</div>
+      <div class="wf-node-name">Claude — Clasificar</div>
+      <div class="wf-node-desc">Detecta intención y parámetros</div>
+      <div class="wf-status" id="st-ia1">○</div>
+    </div>
+
+    <div class="wf-connector" id="line-2">│</div>
+
+    <div class="wf-node idle" id="node-router">
+      <div class="wf-node-icon">⑃</div>
+      <div class="wf-node-name">Router / Switch</div>
+      <div class="wf-node-desc">Elige el camino según intención</div>
+      <div class="wf-status" id="st-router">○</div>
+    </div>
+
+    <div class="wf-connector" id="line-3">│</div>
+
+    <div class="wf-node idle" id="node-supa">
+      <div class="wf-node-icon">🗄️</div>
+      <div class="wf-node-name">Supabase REST API</div>
+      <div class="wf-node-desc">Consulta / escribe en la BD</div>
+      <div class="wf-status" id="st-supa">○</div>
+    </div>
+
+    <div class="wf-connector" id="line-4">│</div>
+
+    <div class="wf-node idle" id="node-ia2">
+      <div class="wf-node-icon">✨</div>
+      <div class="wf-node-name">Claude — Formatear</div>
+      <div class="wf-node-desc">Convierte datos en respuesta útil</div>
+      <div class="wf-status" id="st-ia2">○</div>
+    </div>
+
+    <div class="wf-connector" id="line-5">│</div>
+
+    <div class="wf-node idle" id="node-resp">
+      <div class="wf-node-icon">📤</div>
+      <div class="wf-node-name">Respond to Webhook</div>
+      <div class="wf-node-desc">Devuelve JSON al frontend</div>
+      <div class="wf-status" id="st-resp">○</div>
+    </div>
+
+    <!-- Info de ejecución -->
+    <div class="exec-info">
+      <div class="exec-row">
+        <span class="label">Intención</span>
+        <span class="value" id="exec-intent">—</span>
+      </div>
+      <div class="exec-row">
+        <span class="label">Confianza IA</span>
+        <span class="value" id="exec-conf">—</span>
+      </div>
+      <div class="exec-row">
+        <span class="label">Tiempo</span>
+        <span class="value highlight" id="exec-time">—</span>
+      </div>
+      <div class="exec-row">
+        <span class="label">Registros BD</span>
+        <span class="value" id="exec-rows">—</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   BASE DE DATOS MOCK
+   (simula lo que estaría en Supabase)
+   ============================================================ */
+const DB = {
+  fronteras: [
+    { id:'f1', codigo:'FRO-001', nombre:'Frontera Norte A',  region:'Norte', prioridad:'alta',  estado:'incompleta',     equipos_asignados:1, equipos_pendientes:2, equipos_por_comprar:0 },
+    { id:'f2', codigo:'FRO-002', nombre:'Frontera Norte B',  region:'Norte', prioridad:'alta',  estado:'completa',       equipos_asignados:3, equipos_pendientes:0, equipos_por_comprar:0 },
+    { id:'f3', codigo:'FRO-003', nombre:'Frontera Sur A',    region:'Sur',   prioridad:'media', estado:'incompleta',     equipos_asignados:0, equipos_pendientes:1, equipos_por_comprar:1 },
+    { id:'f4', codigo:'FRO-004', nombre:'Frontera Sur B',    region:'Sur',   prioridad:'media', estado:'completa',       equipos_asignados:2, equipos_pendientes:0, equipos_por_comprar:0 },
+    { id:'f5', codigo:'FRO-005', nombre:'Frontera Este',     region:'Este',  prioridad:'baja',  estado:'incompleta',     equipos_asignados:0, equipos_pendientes:0, equipos_por_comprar:2 },
+    { id:'f6', codigo:'FRO-006', nombre:'Frontera Oeste',    region:'Oeste', prioridad:'baja',  estado:'sin_asignaciones',equipos_asignados:0, equipos_pendientes:0, equipos_por_comprar:0 },
+  ],
+  equipos: [
+    { id:'e1', codigo:'EQ-001', tipo:'Scanner',          modelo:'Canon DR-C230', estado:'disponible'    },
+    { id:'e2', codigo:'EQ-002', tipo:'Scanner',          modelo:'Canon DR-C230', estado:'disponible'    },
+    { id:'e3', codigo:'EQ-003', tipo:'Terminal POS',     modelo:'Verifone VX820',estado:'asignado'      },
+    { id:'e4', codigo:'EQ-004', tipo:'Terminal POS',     modelo:'Verifone VX820',estado:'disponible'    },
+    { id:'e5', codigo:'EQ-005', tipo:'Radio Comunicación',modelo:'Motorola DP1400',estado:'disponible'  },
+    { id:'e6', codigo:'EQ-006', tipo:'Radio Comunicación',modelo:'Motorola DP1400',estado:'asignado'    },
+    { id:'e7', codigo:'EQ-007', tipo:'Cámara IP',        modelo:'Hikvision DS-2CD',estado:'en_reparacion'},
+    { id:'e8', codigo:'EQ-008', tipo:'UPS',              modelo:'APC Back-UPS 600',estado:'disponible'  },
+  ],
+  asignaciones: [
+    { frontera:'FRO-001', equipo:'EQ-003', estado:'activa',          fecha:'2026-04-20' },
+    { frontera:'FRO-002', equipo:'EQ-006', estado:'activa',          fecha:'2026-04-18' },
+    { frontera:'FRO-003', equipo:null,     estado:'pendiente_compra', fecha:'2026-05-01' },
+    { frontera:'FRO-005', equipo:null,     estado:'pendiente_compra', fecha:'2026-05-03' },
+  ]
+};
+
+/* ============================================================
+   MOCK DE RESPUESTAS IA
+   (simula lo que Claude devolvería después de leer la BD)
+   ============================================================ */
+const MOCK_RESPONSES = {
+  pendientes: {
+    intencion: 'listar_fronteras_pendientes',
+    confianza: 0.97,
+    rows: 4,
+    respuesta: `⚠️ Fronteras con asignaciones incompletas (3 encontradas):
+
+{TABLE:pendientes}
+
+🔴 Prioridad alta: FRO-001 tiene 2 equipos pendientes.
+💡 Sugerencia: Hay 4 equipos disponibles para asignar ahora mismo.`
+  },
+
+  equipos: {
+    intencion: 'listar_equipos_disponibles',
+    confianza: 0.99,
+    rows: 4,
+    respuesta: `📦 Equipos disponibles para asignar (4 unidades):
+
+{TABLE:equipos_disp}
+
+Total asignados: 2  |  En reparación: 1  |  Disponibles: 4`
+  },
+
+  resumen: {
+    intencion: 'ver_resumen_dashboard',
+    confianza: 0.96,
+    rows: 1,
+    respuesta: `📊 Resumen ejecutivo — 6 mayo 2026
+
+┌─────────────────────────────────┐
+│  Total fronteras activas    6   │
+│  Fronteras completas        2   │
+│  Fronteras incompletas      3   │
+│  Sin asignaciones           1   │
+├─────────────────────────────────┤
+│  Equipos disponibles        4   │
+│  Equipos asignados          2   │
+│  En reparación              1   │
+├─────────────────────────────────┤
+│  Pendientes de compra       2   │
+└─────────────────────────────────┘
+
+🔴 Atención: FRO-001 (alta prioridad) lleva 16 días incompleta.
+✅ Norte B y Sur B completamente equipadas.`
+  },
+
+  asignar: {
+    intencion: 'asignar_equipo',
+    confianza: 0.94,
+    rows: 1,
+    respuesta: `✅ Asignación completada exitosamente.
+
+  Frontera:  FRO-001 — Frontera Norte A
+  Equipo:    EQ-001 — Scanner Canon DR-C230
+  Estado:    activa
+  Fecha:     6 may 2026, 10:42 AM
+  Hecho por: terminal-ia
+
+EQ-001 marcado como asignado en inventario.
+Quedan 3 equipos disponibles para asignar.`
+  },
+
+  pendiente_compra: {
+    intencion: 'marcar_pendiente_compra',
+    confianza: 0.92,
+    rows: 1,
+    respuesta: `🛒 Frontera FRO-005 marcada como pendiente de compra.
+
+  Frontera:  FRO-005 — Frontera Este
+  Estado:    pendiente_compra
+  Motivo:    Sin equipos disponibles en inventario
+  Registrado: 6 may 2026, 10:43 AM
+
+Esta frontera aparecerá en el reporte de compras pendientes.
+El reporte diario de las 8:00 AM incluirá esta solicitud.`
+  },
+
+  reparacion: {
+    intencion: 'consulta_libre',
+    confianza: 0.88,
+    rows: 1,
+    respuesta: `🔧 Equipos actualmente en reparación (1):
+
+  EQ-007 — Cámara IP Hikvision DS-2CD
+  Estado: en_reparacion
+  Asignación previa: FRO-002
+
+Sin fecha estimada de regreso registrada.
+💡 Puedes actualizar el estado desde la terminal cuando esté listo.`
+  },
+
+  default: {
+    intencion: 'consulta_libre',
+    confianza: 0.71,
+    rows: 0,
+    respuesta: `Entendido tu mensaje, pero no pude identificar una acción específica.
+
+Comandos que puedo ejecutar:
+  • Ver fronteras pendientes / completas
+  • Listar equipos disponibles
+  • Asignar equipo a frontera (ej: "asigna a FRO-001")
+  • Marcar como pendiente de compra
+  • Ver equipos en reparación
+  • Resumen del dashboard
+
+¿Qué necesitas hacer?`
+  }
+};
+
+/* Tablas mock para insertar en respuestas */
+const MOCK_TABLES = {
+  pendientes: {
+    headers: ['Código', 'Frontera', 'Prioridad', 'Pendientes', 'Estado'],
+    rows: [
+      ['FRO-001', 'Norte A',      '🔴 Alta',  '2', '⚠️ incompleta'],
+      ['FRO-003', 'Sur A',        '🟡 Media', '1 + 1 compra', '⚠️ incompleta'],
+      ['FRO-005', 'Este',         '🟢 Baja',  '2 compra', '🛒 pend.compra'],
+      ['FRO-006', 'Oeste',        '🟢 Baja',  '—', '⚫ sin asignar'],
+    ]
+  },
+  equipos_disp: {
+    headers: ['Código', 'Tipo', 'Modelo'],
+    rows: [
+      ['EQ-001', 'Scanner',           'Canon DR-C230'],
+      ['EQ-002', 'Scanner',           'Canon DR-C230'],
+      ['EQ-004', 'Terminal POS',      'Verifone VX820'],
+      ['EQ-005', 'Radio Comunicación','Motorola DP1400'],
+      ['EQ-008', 'UPS',              'APC Back-UPS 600'],
+    ]
+  }
+};
+
+/* ============================================================
+   LÓGICA DE CLASIFICACIÓN MOCK
+   (simula lo que haría Claude en el nodo "Clasificar Intención")
+   ============================================================ */
+function clasificar(cmd) {
+  const c = cmd.toLowerCase();
+  if (/pendiente|falta|incompleta|sin asignar/.test(c))     return 'pendientes';
+  if (/disponible|libre|inventario|cuántos/.test(c))        return 'equipos';
+  if (/resumen|dashboard|ejecutivo|estado general/.test(c)) return 'resumen';
+  if (/asigna|asignar|asignación/.test(c))                  return 'asignar';
+  if (/compra|pendiente de compra|falta equipo/.test(c))    return 'pendiente_compra';
+  if (/reparaci|reparac/.test(c))                           return 'reparacion';
+  return 'default';
+}
+
+/* ============================================================
+   WORKFLOW VISUAL — Animación de pasos
+   ============================================================ */
+const NODES = ['webhook','ia1','router','supa','ia2','resp'];
+
+function resetFlow() {
+  NODES.forEach(n => {
+    const el = document.getElementById('node-'+n);
+    const st = document.getElementById('st-'+n);
+    el.className = 'wf-node idle';
+    st.textContent = '○';
+  });
+  for(let i=1;i<=5;i++) {
+    const l = document.getElementById('line-'+i);
+    if(l) l.className = 'wf-connector';
+  }
+  document.getElementById('exec-intent').textContent = '—';
+  document.getElementById('exec-conf').textContent = '—';
+  document.getElementById('exec-time').textContent = '—';
+  document.getElementById('exec-rows').textContent = '—';
+}
+
+function activateNode(nodeId, lineAfter) {
+  const el = document.getElementById('node-'+nodeId);
+  const st = document.getElementById('st-'+nodeId);
+  el.className = 'wf-node active';
+  st.textContent = '⟳';
+  if(lineAfter) {
+    const l = document.getElementById('line-'+lineAfter);
+    if(l) l.className = 'wf-connector active-line';
+  }
+}
+
+function doneNode(nodeId) {
+  const el = document.getElementById('node-'+nodeId);
+  const st = document.getElementById('st-'+nodeId);
+  el.className = 'wf-node done';
+  st.textContent = '✓';
+}
+
+async function runFlowAnimation(respKey, respData) {
+  resetFlow();
+  const t0 = Date.now();
+
+  // Paso 1: Webhook
+  activateNode('webhook', null);
+  await delay(300);
+  doneNode('webhook');
+
+  // Paso 2: IA Clasificar
+  activateNode('ia1', 1);
+  await delay(700);
+  doneNode('ia1');
+  document.getElementById('exec-intent').innerHTML = `<span class="intent-chip">${respData.intencion}</span>`;
+  document.getElementById('exec-conf').textContent = (respData.confianza * 100).toFixed(0) + '%';
+
+  // Paso 3: Router
+  activateNode('router', 2);
+  await delay(250);
+  doneNode('router');
+
+  // Paso 4: Supabase
+  activateNode('supa', 3);
+  await delay(500);
+  doneNode('supa');
+  document.getElementById('exec-rows').textContent = respData.rows + ' reg.';
+
+  // Paso 5: IA Formatear
+  activateNode('ia2', 4);
+  await delay(600);
+  doneNode('ia2');
+
+  // Paso 6: Respond
+  activateNode('resp', 5);
+  await delay(200);
+  doneNode('resp');
+
+  const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+  document.getElementById('exec-time').textContent = elapsed + 's';
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* ============================================================
+   TERMINAL — Mensajes
+   ============================================================ */
+const output = document.getElementById('output');
+
+function addMsg(type, label, body) {
+  const div = document.createElement('div');
+  div.className = `msg ${type}`;
+  div.innerHTML = `<div class="msg-label">${esc(label)}</div><div class="msg-body">${body}</div>`;
+  output.appendChild(div);
+  output.scrollTop = output.scrollHeight;
+  return div;
+}
+
+function addTable(key) {
+  const data = MOCK_TABLES[key];
+  if (!data) return '';
+  let html = '<table class="t-table"><thead><tr>';
+  data.headers.forEach(h => html += `<th>${esc(h)}</th>`);
+  html += '</tr></thead><tbody>';
+  data.rows.forEach(row => {
+    html += '<tr>';
+    row.forEach(cell => html += `<td>${esc(cell)}</td>`);
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+function formatRespuesta(raw) {
+  // Sustituye marcadores de tabla por HTML real
+  return raw.replace(/\{TABLE:(\w+)\}/g, (_, key) => addTable(key))
+            .replace(/\n/g, '<br>');
+}
+
+function addTyping() {
+  const div = document.createElement('div');
+  div.className = 'msg ia';
+  div.innerHTML = `<div class="msg-label">ia</div><div class="typing"><div class="td"></div><div class="td"></div><div class="td"></div></div>`;
+  output.appendChild(div);
+  output.scrollTop = output.scrollHeight;
+  return div;
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ============================================================
+   SISTEMA DE HISTORIAL
+   ============================================================ */
+const hist = [];
+let histIdx = -1;
+
+/* ============================================================
+   ENVIAR COMANDO
+   ============================================================ */
+const cmdInput = document.getElementById('cmd-input');
+const sendBtn  = document.getElementById('send-btn');
+let loading = false;
+
+async function enviar() {
+  const cmd = cmdInput.value.trim();
+  if (!cmd || loading) return;
+
+  hist.unshift(cmd);
+  histIdx = -1;
+  cmdInput.value = '';
+
+  addMsg('user', 'tú', esc(cmd));
+  const typing = addTyping();
+  loading = true;
+  sendBtn.disabled = true;
+  cmdInput.disabled = true;
+
+  // Tiempo de simulación aleatorio (para que se sienta real)
+  const totalDelay = 1800 + Math.random() * 800;
+
+  const key = clasificar(cmd);
+  const respData = MOCK_RESPONSES[key];
+
+  // Corre la animación del workflow en paralelo
+  runFlowAnimation(key, respData);
+
+  await delay(totalDelay);
+
+  typing.remove();
+  addMsg('ia', 'ia', formatRespuesta(respData.respuesta));
+
+  loading = false;
+  sendBtn.disabled = false;
+  cmdInput.disabled = false;
+  cmdInput.focus();
+}
+
+sendBtn.addEventListener('click', enviar);
+cmdInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { enviar(); return; }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (histIdx < hist.length - 1) { histIdx++; cmdInput.value = hist[histIdx]; }
+  }
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    histIdx > 0 ? (histIdx--, cmdInput.value = hist[histIdx]) : (histIdx=-1, cmdInput.value='');
+  }
+});
+
+document.querySelectorAll('.qbtn').forEach(btn =>
+  btn.addEventListener('click', () => { cmdInput.value = btn.dataset.cmd; enviar(); })
+);
+
+/* ============================================================
+   MENSAJE DE BIENVENIDA
+   ============================================================ */
+addMsg('sys', 'sistema', '🟣 MODO MAQUETA activo — los datos son simulados, no hay conexión real.');
+addMsg('sys', 'flujo', 'Arquitectura: Terminal Web → Webhook → n8n → Claude (clasifica) → Supabase → Claude (formatea) → Respuesta');
+addMsg('sys', 'ayuda', 'Prueba los botones de arriba o escribe cualquier comando. Observa el panel derecho para ver cómo fluye cada paso.');
+
+cmdInput.focus();
+</script>
+</body>
+</html>
