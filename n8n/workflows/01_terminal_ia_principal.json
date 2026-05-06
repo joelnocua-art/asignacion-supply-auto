@@ -1,0 +1,268 @@
+{
+  "name": "Terminal IA - Comando Principal",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "terminal-ia",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Recibe Comando",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "terminal-ia-main"
+    },
+    {
+      "parameters": {
+        "model": "claude-opus-4-7",
+        "options": {
+          "temperature": 0.1,
+          "maxTokens": 1024,
+          "systemMessage": "Eres un agente de clasificación de comandos para un sistema de asignación de supply en fronteras.\n\nTu única tarea es analizar el comando del usuario y devolver un JSON con la intención detectada.\n\nINTENCIONES POSIBLES:\n- consultar_estado_fronteras: El usuario quiere ver el estado general\n- listar_fronteras_pendientes: Quiere ver fronteras sin completar\n- listar_equipos_disponibles: Quiere ver qué equipos hay libres\n- asignar_equipo: Quiere asignar un equipo a una frontera\n- marcar_pendiente_compra: Quiere marcar que falta un equipo y hay que comprarlo\n- ver_resumen_dashboard: Quiere un resumen ejecutivo\n- consulta_libre: Pregunta general sobre los datos\n- desconocido: No se puede determinar la intención\n\nRespuesta SIEMPRE en JSON válido, sin markdown, sin explicaciones:\n{\n  \"intencion\": \"<intencion>\",\n  \"parametros\": {\n    \"frontera_codigo\": \"<codigo si se menciona>\",\n    \"equipo_codigo\": \"<codigo si se menciona>\",\n    \"tipo_equipo\": \"<tipo si se menciona>\",\n    \"filtro_region\": \"<region si se menciona>\",\n    \"filtro_prioridad\": \"<prioridad si se menciona>\"\n  },\n  \"confianza\": <0.0 a 1.0>,\n  \"comando_original\": \"<el comando tal cual>\"\n}"
+        }
+      },
+      "id": "ia-clasificador",
+      "name": "IA - Clasificar Intención",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1,
+      "position": [480, 300],
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-creds",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst iaRespuesta = $input.last().json.text || $input.last().json.content;\n\nlet clasificacion;\ntry {\n  const jsonStr = iaRespuesta.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  clasificacion = JSON.parse(jsonStr);\n} catch (e) {\n  clasificacion = {\n    intencion: 'desconocido',\n    parametros: {},\n    confianza: 0,\n    comando_original: body.comando || ''\n  };\n}\n\nreturn [{ json: { ...clasificacion, comando_raw: body.comando } }];"
+      },
+      "id": "parse-intencion",
+      "name": "Parsear Intención",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": false },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intencion }}",
+                    "rightValue": "consultar_estado_fronteras",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "estado_fronteras"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": false },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intencion }}",
+                    "rightValue": "listar_fronteras_pendientes",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "fronteras_pendientes"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": false },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intencion }}",
+                    "rightValue": "listar_equipos_disponibles",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "equipos_disponibles"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": false },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intencion }}",
+                    "rightValue": "ver_resumen_dashboard",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "resumen_dashboard"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "router-intencion",
+      "name": "Router por Intención",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/v_estado_fronteras",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Accept", "value": "application/json" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "order", "value": "prioridad.asc,nombre.asc" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "supabase-estado-fronteras",
+      "name": "Supabase - Estado Fronteras",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1200, 160]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/v_estado_fronteras",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "estado_general", "value": "neq.completa" },
+            { "name": "order", "value": "prioridad.asc" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "supabase-fronteras-pendientes",
+      "name": "Supabase - Fronteras Pendientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/v_equipos_disponibles",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "supabase-equipos-disponibles",
+      "name": "Supabase - Equipos Disponibles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1200, 440]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/v_resumen_dashboard",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "supabase-resumen",
+      "name": "Supabase - Resumen Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1200, 580]
+    },
+    {
+      "parameters": {
+        "model": "claude-opus-4-7",
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 2048,
+          "systemMessage": "Eres el asistente de la Terminal IA del sistema de asignación de supply en fronteras.\n\nConvierte los datos crudos de la base de datos en respuestas claras, útiles y accionables.\n\nReglas:\n- Usa emojis para estados: ✅ completo, ⚠️ pendiente, 🛒 pendiente compra, 🔴 urgente\n- Sé conciso pero informativo\n- Si hay problemas de alta prioridad, resáltalos primero\n- Sugiere acciones concretas cuando sea relevante\n- Usa tablas de texto cuando haya múltiples registros\n- Responde siempre en español"
+        }
+      },
+      "id": "ia-formateador",
+      "name": "IA - Formatear Respuesta",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1,
+      "position": [1440, 380],
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-creds",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { respuesta: $json.text || $json.content, intencion: $('parse-intencion').first().json.intencion, timestamp: new Date().toISOString() } }}"
+      },
+      "id": "webhook-response",
+      "name": "Respuesta al Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1680, 380]
+    }
+  ],
+  "connections": {
+    "Webhook - Recibe Comando": {
+      "main": [[{ "node": "IA - Clasificar Intención", "type": "main", "index": 0 }]]
+    },
+    "IA - Clasificar Intención": {
+      "main": [[{ "node": "Parsear Intención", "type": "main", "index": 0 }]]
+    },
+    "Parsear Intención": {
+      "main": [[{ "node": "Router por Intención", "type": "main", "index": 0 }]]
+    },
+    "Router por Intención": {
+      "estado_fronteras":    [{ "node": "Supabase - Estado Fronteras",    "type": "main", "index": 0 }],
+      "fronteras_pendientes":[{ "node": "Supabase - Fronteras Pendientes","type": "main", "index": 0 }],
+      "equipos_disponibles": [{ "node": "Supabase - Equipos Disponibles", "type": "main", "index": 0 }],
+      "resumen_dashboard":   [{ "node": "Supabase - Resumen Dashboard",   "type": "main", "index": 0 }]
+    },
+    "Supabase - Estado Fronteras":    { "main": [[{ "node": "IA - Formatear Respuesta", "type": "main", "index": 0 }]] },
+    "Supabase - Fronteras Pendientes":{ "main": [[{ "node": "IA - Formatear Respuesta", "type": "main", "index": 0 }]] },
+    "Supabase - Equipos Disponibles": { "main": [[{ "node": "IA - Formatear Respuesta", "type": "main", "index": 0 }]] },
+    "Supabase - Resumen Dashboard":   { "main": [[{ "node": "IA - Formatear Respuesta", "type": "main", "index": 0 }]] },
+    "IA - Formatear Respuesta": {
+      "main": [[{ "node": "Respuesta al Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": ["supply", "ia", "supabase", "terminal"]
+}

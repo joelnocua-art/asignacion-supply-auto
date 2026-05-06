@@ -1,0 +1,244 @@
+{
+  "name": "Asignación Automática - Motor Principal",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "asignar-equipo",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-asignacion",
+      "name": "Webhook - Solicitud Asignación",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "asignar-equipo-main"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/fronteras",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "codigo", "value": "=eq.{{ $json.body.frontera_codigo }}" },
+            { "name": "select", "value": "*" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "buscar-frontera",
+      "name": "Buscar Frontera",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/equipos",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "estado", "value": "eq.disponible" },
+            { "name": "select", "value": "id,codigo,modelo,tipo_id,tipos_equipo(nombre)" },
+            { "name": "limit", "value": "1" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "buscar-equipo-disponible",
+      "name": "Buscar Equipo Disponible",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [720, 160]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ]
+        }
+      },
+      "id": "if-hay-equipo",
+      "name": "¿Hay Equipo Disponible?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 160]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/asignaciones",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "frontera_id",
+              "value": "={{ $('Buscar Frontera').first().json[0].id }}"
+            },
+            {
+              "name": "equipo_id",
+              "value": "={{ $('Buscar Equipo Disponible').first().json[0].id }}"
+            },
+            { "name": "estado", "value": "activa" },
+            {
+              "name": "fecha_asignacion",
+              "value": "={{ new Date().toISOString() }}"
+            },
+            { "name": "asignado_por", "value": "={{ $('Webhook - Solicitud Asignación').first().json.body.usuario || 'terminal-ia' }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "crear-asignacion",
+      "name": "Crear Asignación en Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1200, 80]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/equipos?id=eq.{{ $('Buscar Equipo Disponible').first().json[0].id }}",
+        "method": "PATCH",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "estado", "value": "asignado" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "actualizar-estado-equipo",
+      "name": "Actualizar Estado Equipo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1200, 220]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/asignaciones",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "frontera_id",
+              "value": "={{ $('Buscar Frontera').first().json[0].id }}"
+            },
+            { "name": "estado", "value": "pendiente_compra" },
+            { "name": "notas", "value": "Sin equipos disponibles. Pendiente de compra." },
+            {
+              "name": "asignado_por",
+              "value": "={{ $('Webhook - Solicitud Asignación').first().json.body.usuario || 'terminal-ia' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "registrar-pendiente-compra",
+      "name": "Registrar Pendiente de Compra",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1200, 380]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { exito: true, mensaje: '✅ Equipo ' + $('Buscar Equipo Disponible').first().json[0].codigo + ' asignado a frontera ' + $('Buscar Frontera').first().json[0].nombre, asignacion_id: $json[0].id } }}"
+      },
+      "id": "respuesta-exito",
+      "name": "Respuesta Éxito",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1440, 80]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { exito: false, mensaje: '🛒 Sin equipos disponibles. Frontera ' + $('Buscar Frontera').first().json[0].nombre + ' marcada como pendiente de compra.', requiere_compra: true } }}"
+      },
+      "id": "respuesta-pendiente",
+      "name": "Respuesta Pendiente Compra",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1440, 380]
+    }
+  ],
+  "connections": {
+    "Webhook - Solicitud Asignación": {
+      "main": [[{ "node": "Buscar Frontera", "type": "main", "index": 0 }]]
+    },
+    "Buscar Frontera": {
+      "main": [[{ "node": "Buscar Equipo Disponible", "type": "main", "index": 0 }]]
+    },
+    "Buscar Equipo Disponible": {
+      "main": [[{ "node": "¿Hay Equipo Disponible?", "type": "main", "index": 0 }]]
+    },
+    "¿Hay Equipo Disponible?": {
+      "main": [
+        [{ "node": "Crear Asignación en Supabase", "type": "main", "index": 0 }],
+        [{ "node": "Registrar Pendiente de Compra", "type": "main", "index": 0 }]
+      ]
+    },
+    "Crear Asignación en Supabase": {
+      "main": [[{ "node": "Actualizar Estado Equipo", "type": "main", "index": 0 }]]
+    },
+    "Actualizar Estado Equipo": {
+      "main": [[{ "node": "Respuesta Éxito", "type": "main", "index": 0 }]]
+    },
+    "Registrar Pendiente de Compra": {
+      "main": [[{ "node": "Respuesta Pendiente Compra", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": ["supply", "asignacion", "supabase"]
+}

@@ -1,0 +1,120 @@
+{
+  "name": "Reporte Diario Automático",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "triggerAtHour": 8, "triggerAtMinute": 0 }]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Cron - 8am Diario",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/v_resumen_dashboard",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "obtener-resumen",
+      "name": "Obtener Resumen Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/v_estado_fronteras",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "estado_general", "value": "neq.completa" },
+            { "name": "order", "value": "prioridad.asc" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "obtener-pendientes",
+      "name": "Obtener Fronteras Pendientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [480, 460]
+    },
+    {
+      "parameters": {
+        "model": "claude-opus-4-7",
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 1500,
+          "systemMessage": "Eres el generador de reportes diarios del sistema de asignación supply.\n\nGenera un reporte ejecutivo claro y accionable en español. Usa formato de texto plano con emojis.\n\nEstructura del reporte:\n1. Título con fecha\n2. Resumen ejecutivo (2-3 líneas)\n3. Métricas clave\n4. Fronteras que necesitan atención (si hay)\n5. Acciones recomendadas\n\nSé directo y orientado a la acción."
+        }
+      },
+      "id": "ia-reporte",
+      "name": "IA - Generar Reporte",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1,
+      "position": [720, 380],
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-creds",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.N8N_WEBHOOK_BASE_URL }}/webhook/terminal-ia",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ tipo: 'reporte_diario', reporte: $json.text || $json.content, timestamp: new Date().toISOString() }) }}",
+        "options": {}
+      },
+      "id": "enviar-reporte",
+      "name": "Enviar Reporte al Canal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [960, 380]
+    }
+  ],
+  "connections": {
+    "Cron - 8am Diario": {
+      "main": [
+        [
+          { "node": "Obtener Resumen Supabase",    "type": "main", "index": 0 },
+          { "node": "Obtener Fronteras Pendientes", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Obtener Resumen Supabase":    { "main": [[{ "node": "IA - Generar Reporte", "type": "main", "index": 0 }]] },
+    "Obtener Fronteras Pendientes":{ "main": [[{ "node": "IA - Generar Reporte", "type": "main", "index": 0 }]] },
+    "IA - Generar Reporte":        { "main": [[{ "node": "Enviar Reporte al Canal", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": ["supply", "reporte", "cron", "ia"]
+}

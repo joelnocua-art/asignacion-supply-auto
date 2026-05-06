@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terminal IA — Sistema Supply</title>
+  <link rel="stylesheet" href="css/terminal.css">
+</head>
+<body>
+  <div class="terminal-wrapper">
+
+    <!-- Header -->
+    <div class="terminal-header">
+      <div class="header-dots">
+        <span class="dot red"></span>
+        <span class="dot yellow"></span>
+        <span class="dot green"></span>
+      </div>
+      <div class="header-title">terminal-ia — sistema supply v1.0</div>
+      <div class="header-status">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">conectando...</span>
+      </div>
+    </div>
+
+    <!-- Output area -->
+    <div class="terminal-output" id="output">
+      <div class="message system">
+        <span class="prefix">sistema</span>
+        <span class="content">Terminal IA inicializada. Escribe un comando o usa los atajos de abajo.</span>
+      </div>
+      <div class="message system">
+        <span class="prefix">ayuda</span>
+        <span class="content">Ejemplos: "¿qué fronteras faltan?" · "asigna equipo a FRO-001" · "¿cuántos equipos hay disponibles?" · "resumen del día"</span>
+      </div>
+    </div>
+
+    <!-- Quick actions -->
+    <div class="quick-actions">
+      <button class="quick-btn" data-cmd="¿Qué fronteras están pendientes de asignación?">⚠️ Pendientes</button>
+      <button class="quick-btn" data-cmd="¿Cuántos equipos hay disponibles?">📦 Equipos libres</button>
+      <button class="quick-btn" data-cmd="Dame un resumen ejecutivo del estado actual">📊 Resumen</button>
+      <button class="quick-btn" data-cmd="Muestra el estado completo de todas las fronteras">🗺️ Estado fronteras</button>
+    </div>
+
+    <!-- Input area -->
+    <div class="terminal-input-area">
+      <span class="input-prefix">›</span>
+      <input
+        type="text"
+        id="command-input"
+        class="command-input"
+        placeholder="Escribe un comando en lenguaje natural..."
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button id="send-btn" class="send-btn" title="Enviar (Enter)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+
+  </div>
+
+  <script src="js/terminal.js"></script>
+</body>
+</html>
